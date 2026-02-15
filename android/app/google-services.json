@@ -1,0 +1,107 @@
+{
+  "project_info": {
+    "project_number": "60784874372",
+    "firebase_url": "https://mymess-7b167-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "mymess-7b167",
+    "storage_bucket": "mymess-7b167.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:60784874372:android:40b04d659eee216bf303d1",
+        "android_client_info": {
+          "package_name": "com.metallurgyop.mymess"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "60784874372-pnl9khs0btm4b3915u8dgjemh6da1tqe.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.metallurgyop.mymess",
+            "certificate_hash": "7b790ffd0b9cd3528ca3bb5f9d2e404dc0e09521"
+          }
+        },
+        {
+          "client_id": "60784874372-q2c9qj0rd1c76pvki599lfa1jprn02ta.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.metallurgyop.mymess",
+            "certificate_hash": "55053c4990c4395e9319b42d1fa41b5c7d23dfd3"
+          }
+        },
+        {
+          "client_id": "60784874372-8nqhocnbteejtv1p44pj7l67f9vp9v5m.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDN7ZJGWgdtrwYT78YFU8f_ldILsLgqNGA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "60784874372-8nqhocnbteejtv1p44pj7l67f9vp9v5m.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "60784874372-lv1p7gmr57solic3nfjb7ken9deol653.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.metallurgyop.MyMess"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:60784874372:android:f64305be85ca9941f303d1",
+        "android_client_info": {
+          "package_name": "com.metaop.mymessflutter"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "60784874372-gntnlngjgjd35drqii5m026dascgbsr3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.metaop.mymessflutter",
+            "certificate_hash": "7b790ffd0b9cd3528ca3bb5f9d2e404dc0e09521"
+          }
+        },
+        {
+          "client_id": "60784874372-8nqhocnbteejtv1p44pj7l67f9vp9v5m.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDN7ZJGWgdtrwYT78YFU8f_ldILsLgqNGA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "60784874372-8nqhocnbteejtv1p44pj7l67f9vp9v5m.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "60784874372-lv1p7gmr57solic3nfjb7ken9deol653.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.metallurgyop.MyMess"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
