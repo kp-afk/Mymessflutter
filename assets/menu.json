@@ -1,44 +1,128 @@
 [
   {
     "day": "Monday",
-    "breakfast": { "start": "07:30", "end": "09:15", "items": ["Aloo Pyaaz Paratha", "Chutneys/Pickle", "Cornflakes", "Banana (2 pcs)", "Bournvita/Coffee/Tea/Milk", "Bread/Butter/Jam"] },
-    "lunch": { "start": "12:15", "end": "14:30", "items": ["Veg/Egg Biryani", "Green Chutney", "Chana Dal", "Boondi Raita", "Chapati", "Salad"] },
-    "dinner": { "start": "19:30", "end": "21:15", "items": ["Mixed Veg", "Amritsari Chhole", "Rice", "Chapati", "Salad", "Besan Ladoo"] }
+    "breakfast": {
+      "start": "07:30",
+      "end": "09:15",
+      "items": ["Aloo Pyaaz Paratha", "Ketchup, Pickle, Tomato Chutney", "Cornflakes", "Banana (2 Pieces)", "Bournvita, Coffee, Milk (200mL), Tea", "Bread, Butter, Jam", "Sprouts (Boiled/Soaked)"]
+    },
+    "lunch": {
+      "start": "12:15",
+      "end": "14:30",
+      "items": ["Veg Biryani / Egg Biryani", "Veg Gravy", "Chana Dal", "Boondi Raita", "Chapati", "Salad"]
+    },
+    "dinner": {
+      "start": "19:30",
+      "end": "21:15",
+      "items": ["Mix Dal", "Aloo Matar Tamatar", "Rice", "Chapati", "Salad", "Besan Ladoo"]
+    }
   },
   {
     "day": "Tuesday",
-    "breakfast": { "start": "07:30", "end": "09:15", "items": ["Khasta Kachori", "Namkeen Khichdi", "Sprouts Chaat", "Bournvita/Coffee/Tea/Milk", "Bread/Butter/Jam"] },
-    "lunch": { "start": "12:15", "end": "14:30", "items": ["Mix Dal", "Aloo Matar Tamatar", "Papad", "Veg Raita", "Rice", "Chapati", "Salad"] },
-    "dinner": { "start": "19:30", "end": "21:15", "items": ["Aloo Bhujia", "Arhar Dal", "Rice", "Chapati", "Salad", "Veg Manchow Soup"] }
+    "breakfast": {
+      "start": "07:30",
+      "end": "09:15",
+      "items": ["Khasta Kachori/Uttapam", "Namkeen Khichdi", "Sprouts Chaat", "Chhole Aloo", "Ketchup", "Bournvita, Coffee, Milk (200mL), Tea", "Bread, Butter, Jam"]
+    },
+    "lunch": {
+      "start": "12:15",
+      "end": "14:30",
+      "items": ["Aloo Bhujia", "Arhar Dal", "Fryums", "Veg Raita", "Rice", "Chapati", "Salad"]
+    },
+    "dinner": {
+      "start": "19:30",
+      "end": "21:15",
+      "items": ["Mixed Veg", "Amritsari Chhole", "Chapati", "Rice", "Salad", "Veg Manchow Soup"]
+    }
   },
   {
     "day": "Wednesday",
-    "breakfast": { "start": "07:30", "end": "09:15", "items": ["Mix Paratha", "Chutneys/Pickle", "Eggs/Oranges (2 pcs)", "Bournvita/Coffee/Tea/Milk", "Bread/Butter/Jam"] },
-    "lunch": { "start": "12:15", "end": "14:30", "items": ["Dal Tadka", "Gobhi Fry", "Boondi Raita", "Rice", "Chapati", "Salad"] },
-    "dinner": { "start": "19:30", "end": "21:15", "items": ["Paneer Bhurji/Palak Paneer", "Kadhai Chicken", "Moong Dal", "Rice", "Chapati", "Salad", "Gulab Jamun (2 pcs)"] }
+    "breakfast": {
+      "start": "07:30",
+      "end": "09:15",
+      "items": ["Mix Paratha", "Ketchup, Pickle, Green Chutney", "Eggs/Oranges (2 Pieces)", "Bournvita, Coffee, Milk (200mL), Tea", "Bread, Butter, Jam", "Sprouts (Boiled/Soaked)"]
+    },
+    "lunch": {
+      "start": "12:15",
+      "end": "14:30",
+      "items": ["Dal Tadka", "Gobhi Fry", "Boondi Raita", "Rice", "Chapati", "Salad"]
+    },
+    "dinner": {
+      "start": "19:30",
+      "end": "21:15",
+      "items": ["Paneer Butter Masala/Paneer Bhurji", "Kadhai Chicken", "Red Masoor Dal", "Rice", "Chapati", "Salad", "Gulab Jamun (2 pcs)"]
+    }
   },
   {
     "day": "Thursday",
-    "breakfast": { "start": "07:30", "end": "09:15", "items": ["Fried Idli", "Namkeen Seviyan", "Sambhar", "Coconut Chutney", "Sprouts Chaat", "Bournvita/Coffee/Tea/Milk", "Bread/Butter/Jam"] },
-    "lunch": { "start": "12:15", "end": "14:30", "items": ["Methi Aloo", "Black Chana Curry", "Curd", "Rice", "Chapati", "Salad"] },
-    "dinner": { "start": "19:30", "end": "21:15", "items": ["Poori Aloo", "Red Masoor Dal", "Tehri Rice", "Chapati", "Salad", "Kheer/Jalebi"] }
+    "breakfast": {
+      "start": "07:30",
+      "end": "09:15",
+      "items": ["Fried Idli", "Namkeen Seviyan", "Sambhar", "Ketchup", "Red Coconut Chutney", "Sprouts Chaat", "Bournvita, Coffee, Milk (200mL), Tea", "Bread, Butter, Jam"]
+    },
+    "lunch": {
+      "start": "12:15",
+      "end": "14:30",
+      "items": ["Baigan Aloo", "Masoor Dal", "Curd", "Rice", "Chapati", "Salad"]
+    },
+    "dinner": {
+      "start": "19:30",
+      "end": "21:15",
+      "items": ["Poori Aloo", "Moong Dal", "Tehri Rice", "Chapati", "Salad", "Kheer/Jalebi"]
+    }
   },
   {
     "day": "Friday",
-    "breakfast": { "start": "07:30", "end": "09:15", "items": ["Poha", "Sandwich (2 pcs)", "Omelette/Banana (2 pcs)", "Bournvita/Coffee/Tea/Milk", "Bread/Butter/Jam"] },
-    "lunch": { "start": "12:15", "end": "14:30", "items": ["Rajma", "Cabbage Matar Aloo", "Curd", "Rice", "Chapati", "Salad"] },
-    "dinner": { "start": "19:30", "end": "21:15", "items": ["Palak Corn", "Urad Chana Dal", "Pulao", "Chapati", "Salad", "Veg Manchow Soup"] }
+    "breakfast": {
+      "start": "07:30",
+      "end": "09:15",
+      "items": ["Poha", "Sandwich (2 pieces)", "Ketchup", "Chopped Onion", "Omelette/Banana (2 Pieces)", "Bournvita, Coffee, Milk (200mL), Tea", "Bread, Butter, Jam", "Sprouts"]
+    },
+    "lunch": {
+      "start": "12:15",
+      "end": "14:30",
+      "items": ["Rajma", "Cabbage Matar Aloo", "Curd", "Rice", "Chapati", "Salad"]
+    },
+    "dinner": {
+      "start": "19:30",
+      "end": "21:15",
+      "items": ["Palak Corn", "Urad Chana Dal", "Pulao", "Chapati", "Salad", "Veg Manchow Soup"]
+    }
   },
   {
     "day": "Saturday",
-    "breakfast": { "start": "07:30", "end": "09:15", "items": ["Pav Bhaji", "Dalia", "Corn Chaat", "Bournvita/Coffee/Tea/Milk", "Bread/Butter/Jam"] },
-    "lunch": { "start": "12:15", "end": "14:30", "items": ["White Chana & Bhatura", "Capsicum Aloo", "Boondi Raita", "Rice", "Chapati", "Salad"] },
-    "dinner": { "start": "19:30", "end": "21:15", "items": ["Arhar Dal", "Soya Badi", "Rice", "Chapati", "Salad", "Sooji Halwa"] }
+    "breakfast": {
+      "start": "07:30",
+      "end": "09:15",
+      "items": ["Pav Bhaji", "Dalia/Namkeen Khichdi", "Corn Chaat", "Ketchup, Pickle", "Bournvita, Coffee, Milk (200mL), Tea", "Bread, Butter, Jam"]
+    },
+    "lunch": {
+      "start": "12:15",
+      "end": "14:30",
+      "items": ["White Chana", "Capsicum Aloo", "Bhatura", "Bhuni Mirch", "Green Chutney", "Boondi Raita", "Rice", "Chapati", "Salad"]
+    },
+    "dinner": {
+      "start": "19:30",
+      "end": "21:15",
+      "items": ["Arhar Dal", "Soya Badi", "Rice", "Chapati", "Salad", "Sooji Halwa"]
+    }
   },
   {
     "day": "Sunday",
-    "breakfast": { "start": "08:00", "end": "09:30", "items": ["Dosa", "Sambhar", "Red Coconut Chutney", "Oranges/Boiled Egg (2 pcs)", "Bournvita/Coffee/Tea/Milk", "Bread/Butter/Jam"] },
-    "lunch": { "start": "12:15", "end": "14:30", "items": ["Dal Makhani", "Masala Gobhi Aloo", "Curd", "Rice", "Chapati", "Salad"] },
-    "dinner": { "start": "19:30", "end": "21:15", "items": ["Paneer Lababdar/Chicken Masala", "Black Masoor Dal", "Rice", "Chapati", "Salad", "Gajar ka Halwa"] }
+    "breakfast": {
+      "start": "08:00",
+      "end": "09:30",
+      "items": ["Dosa", "Sambhar", "Red Coconut Chutney", "Oranges/Boiled Egg (2 Pieces)", "Bournvita, Coffee, Milk (200mL), Tea", "Bread, Butter, Jam", "Sprouts"]
+    },
+    "lunch": {
+      "start": "12:15",
+      "end": "14:30",
+      "items": ["Dal Makhani", "Masala Gobhi Aloo", "Sweet Lassi", "Rice", "Chapati", "Salad"]
+    },
+    "dinner": {
+      "start": "19:30",
+      "end": "21:15",
+      "items": ["Paneer Lababdar/Butter Chicken", "Black Masoor Dal", "Chapati", "Rice", "Salad", "Ice Cream (2 scoops)"]
+    }
   }
 ]

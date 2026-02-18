@@ -2,35 +2,34 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/meal_data.dart';
 import '../repositories/meal_repository.dart';
 import 'auth_provider.dart';
 
-// Provider for MealRepository
+// ─── Repository provider ──────────────────────────────────────────────────
+
 final mealRepositoryProvider = Provider((ref) => MealRepository());
 
-// Provider for MealNotifier
+// ─── Meal schedule provider ───────────────────────────────────────────────
+
 final mealProvider = StateNotifierProvider<MealNotifier, MealScheduleState>((ref) {
   final repository = ref.watch(mealRepositoryProvider);
   return MealNotifier(repository);
 });
 
-// ✅ FIXED: Auto-dispose provider that rebuilds when user changes
-final rsvpProvider = StateNotifierProvider.autoDispose.family<RsvpNotifier, RsvpState, String>(
-      (ref, mealKey) {
-    // Watch the current user - provider rebuilds when user changes
-    final currentUser = ref.watch(currentUserProvider);
+// ─── RSVP provider ────────────────────────────────────────────────────────
+//
+// Auto-dispose + family: one instance per mealKey, torn down when off-screen.
+// Rebuilds automatically when the signed-in user changes (via currentUserProvider).
 
-    final notifier = RsvpNotifier(mealKey, ref);
+final rsvpProvider = StateNotifierProvider.autoDispose
+    .family<RsvpNotifier, RsvpState, String>((ref, mealKey) {
+  final currentUser = ref.watch(currentUserProvider);
+  return RsvpNotifier(mealKey, ref, currentUser?.uid);
+});
 
-    // Check user's attendance when provider is created and user is signed in
-    if (currentUser != null) {
-      Future.microtask(() => notifier.checkUserAttendance(currentUser.uid));
-    }
-
-    return notifier;
-  },
-);
+// ─── MealNotifier (unchanged logic) ──────────────────────────────────────
 
 class MealNotifier extends StateNotifier<MealScheduleState> {
   final MealRepository _repository;
@@ -76,11 +75,8 @@ class MealNotifier extends StateNotifier<MealScheduleState> {
 
       final startTime = dateFormat.parse(meal.start);
       final mealDateTime = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        startTime.hour,
-        startTime.minute,
+        date.year, date.month, date.day,
+        startTime.hour, startTime.minute,
       );
 
       return MealInfo(
@@ -93,8 +89,6 @@ class MealNotifier extends StateNotifier<MealScheduleState> {
     }
 
     final meals = <MealInfo>[];
-
-    // Get previous, current, and next day
     final days = [
       now.subtract(const Duration(days: 1)),
       now,
@@ -105,39 +99,26 @@ class MealNotifier extends StateNotifier<MealScheduleState> {
       final dayName = DateFormat('EEEE').format(date);
       final menu = menuList.firstWhere(
             (m) => m.day.toLowerCase() == dayName.toLowerCase(),
-        orElse: () => menuList.first, // Fallback
+        orElse: () => menuList.first,
       );
-
-      final breakfast = _getMealInfo(date.weekday, 'Breakfast', menu, date);
-      final lunch = _getMealInfo(date.weekday, 'Lunch', menu, date);
-      final dinner = _getMealInfo(date.weekday, 'Dinner', menu, date);
-
-      if (breakfast != null) meals.add(breakfast);
-      if (lunch != null) meals.add(lunch);
-      if (dinner != null) meals.add(dinner);
+      for (final type in ['Breakfast', 'Lunch', 'Dinner']) {
+        final info = _getMealInfo(date.weekday, type, menu, date);
+        if (info != null) meals.add(info);
+      }
     }
 
     meals.sort((a, b) => a.dateTime.compareTo(b.dateTime));
 
-    MealInfo? currentMeal;
-    MealInfo? nextMeal;
-    MealInfo? nextToNextMeal;
-    MealInfo? previousMeal;
-
+    MealInfo? currentMeal, nextMeal, nextToNextMeal, previousMeal;
     int currentMealIndex = -1;
 
-    // Find current meal
     for (int i = 0; i < meals.length; i++) {
       final meal = meals[i];
       final endTime = dateFormat.parse(meal.end);
       final mealEnd = DateTime(
-        meal.dateTime.year,
-        meal.dateTime.month,
-        meal.dateTime.day,
-        endTime.hour,
-        endTime.minute,
+        meal.dateTime.year, meal.dateTime.month, meal.dateTime.day,
+        endTime.hour, endTime.minute,
       );
-
       if (now.isAfter(meal.dateTime) && now.isBefore(mealEnd)) {
         currentMealIndex = i;
         break;
@@ -146,33 +127,20 @@ class MealNotifier extends StateNotifier<MealScheduleState> {
 
     if (currentMealIndex != -1) {
       currentMeal = meals[currentMealIndex];
-      if (currentMealIndex > 0) {
-        previousMeal = meals[currentMealIndex - 1];
-      }
-      if (currentMealIndex + 1 < meals.length) {
-        nextMeal = meals[currentMealIndex + 1];
-      }
-      if (currentMealIndex + 2 < meals.length) {
-        nextToNextMeal = meals[currentMealIndex + 2];
-      }
+      if (currentMealIndex > 0) previousMeal = meals[currentMealIndex - 1];
+      if (currentMealIndex + 1 < meals.length) nextMeal = meals[currentMealIndex + 1];
+      if (currentMealIndex + 2 < meals.length) nextToNextMeal = meals[currentMealIndex + 2];
     } else {
-      // No current meal, find next upcoming
       for (int i = 0; i < meals.length; i++) {
-        final meal = meals[i];
-        if (now.isBefore(meal.dateTime)) {
-          if (i > 0) {
-            previousMeal = meals[i - 1];
-          }
-          nextMeal = meal;
-          if (i + 1 < meals.length) {
-            nextToNextMeal = meals[i + 1];
-          }
+        if (now.isBefore(meals[i].dateTime)) {
+          if (i > 0) previousMeal = meals[i - 1];
+          nextMeal = meals[i];
+          if (i + 1 < meals.length) nextToNextMeal = meals[i + 1];
           break;
         }
       }
     }
 
-    // If no current or next meal, use last meal as previous
     if (currentMeal == null && nextMeal == null && meals.isNotEmpty) {
       previousMeal = meals.last;
     }
@@ -192,54 +160,86 @@ class MealNotifier extends StateNotifier<MealScheduleState> {
   }
 }
 
-// RSVP with Firebase Realtime Database
-// Structure: attendance/$date/$meal/$uid (matches existing Kotlin app)
+// ─── RsvpNotifier ─────────────────────────────────────────────────────────
+
 class RsvpNotifier extends StateNotifier<RsvpState> {
   final String _mealKey;
-  final Ref _ref;  // ✅ Store ref to access current user dynamically
+  final Ref _ref;
+  final String? _userId;
   final DatabaseReference _database = FirebaseDatabase.instance.ref();
   StreamSubscription? _attendanceSubscription;
 
-  RsvpNotifier(this._mealKey, this._ref) : super(RsvpState(isLoading: true)) {
+  // Debounce: ignore taps while a Firebase write is in flight.
+  bool _isUpdating = false;
+
+  // SharedPreferences cache key: unique per user + meal so multiple accounts
+  // on the same device don't bleed into each other.
+  String get _cacheKey => 'rsvp_${_mealKey}_${_userId ?? 'guest'}';
+
+  RsvpNotifier(this._mealKey, this._ref, this._userId)
+  // Start with isLoading: false — we show the cached state immediately.
+  // The live listener will silently correct it once Firebase responds.
+      : super(RsvpState(isLoading: false)) {
+    _initFromCache();
     _listenToAttendance();
   }
 
-  // Parse mealKey (format: "2024-02-10_Breakfast") into date and meal
-  Map<String, String> _parseMealKey() {
-    final parts = _mealKey.split('_');
-    return {
-      'date': parts[0], // "2024-02-10"
-      'meal': parts[1], // "Breakfast"
-    };
+  // ── Step 1: paint the UI instantly from local cache ──────────────────────
+
+  Future<void> _initFromCache() async {
+    if (_userId == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.getString(_cacheKey);
+      if (cached != null && mounted) {
+        state = state.copyWith(
+          userSelection: _selectionFromString(cached),
+        );
+      }
+    } catch (_) {
+      // Cache read failures are silent — Firebase will fill in the truth.
+    }
   }
+
+  // ── Step 2: live Firebase listener — real-time attendee list + counts ────
+  // Also derives the current user's selection directly from the snapshot
+  // so we never need a separate one-shot fetch.
 
   void _listenToAttendance() {
     final parsed = _parseMealKey();
-    final attendanceRef = _database
+    final ref = _database
         .child('attendance')
         .child(parsed['date']!)
         .child(parsed['meal']!);
 
-    _attendanceSubscription = attendanceRef.onValue.listen((event) {
+    _attendanceSubscription = ref.onValue.listen((event) {
       if (!mounted) return;
 
       if (event.snapshot.value == null) {
-        state = RsvpState(
+        state = state.copyWith(
           yesCount: 0,
           userSelection: RsvpOption.none,
           attendeesList: [],
-          isLoading: false,
         );
+        _writeCache(RsvpOption.none);
         return;
       }
 
       final data = Map<String, dynamic>.from(event.snapshot.value as Map);
       final attendees = <AttendeeInfo>[];
       int yesCount = 0;
+      RsvpOption? mySelection;
 
-      data.forEach((userId, userData) {
+      data.forEach((uid, userData) {
         final userMap = Map<String, dynamic>.from(userData as Map);
         final isAttending = userMap['isAttending'] as bool? ?? false;
+
+        // Derive the current user's own selection straight from the live
+        // snapshot — no extra round-trip needed.
+        if (_userId != null && uid == _userId) {
+          mySelection = isAttending ? RsvpOption.yes : RsvpOption.no;
+          _writeCache(mySelection!);
+        }
 
         if (isAttending) {
           yesCount++;
@@ -254,96 +254,117 @@ class RsvpNotifier extends StateNotifier<RsvpState> {
         state = state.copyWith(
           yesCount: yesCount,
           attendeesList: attendees,
-          isLoading: false,
+          // Only override userSelection from Firebase if we actually found
+          // this user's record. If they have no record yet, keep whatever
+          // the cache told us (avoids a flicker back to "none" on slow connections).
+          userSelection: mySelection ?? state.userSelection,
         );
       }
     });
   }
 
-  Future<void> updateAttendance(bool isAttending, String userId, String userName, String userEmail) async {
-    try {
-      final parsed = _parseMealKey();
-      final attendanceRef = _database
-          .child('attendance')
-          .child(parsed['date']!)
-          .child(parsed['meal']!)
-          .child(userId);
+  // ── Optimistic update with rollback ───────────────────────────────────────
+  // UI updates immediately. Firebase write happens async in the background.
+  // If the write fails we roll back to the previous state + cache.
 
-      if (isAttending) {
-        await attendanceRef.set({
-          'isAttending': true,
-          'name': userName,
-          'email': userEmail,
-          'timestamp': ServerValue.timestamp,
-        });
-        if (mounted) {
-          state = state.copyWith(userSelection: RsvpOption.yes);
-        }
-      } else {
-        await attendanceRef.set({
-          'isAttending': false,
-          'name': userName,
-          'email': userEmail,
-          'timestamp': ServerValue.timestamp,
-        });
-        if (mounted) {
-          state = state.copyWith(userSelection: RsvpOption.no);
-        }
-      }
-    } catch (e) {
-      print('Error updating attendance: $e');
+  Future<void> updateAttendance(
+      bool isAttending,
+      String userId,
+      String userName,
+      String userEmail,
+      ) async {
+    if (_isUpdating) return; // Debounce: drop taps while write is in flight
+    _isUpdating = true;
+
+    final previousState = state;
+    final newSelection = isAttending ? RsvpOption.yes : RsvpOption.no;
+
+    // Optimistic: reflect the tap instantly
+    if (mounted) {
+      state = state.copyWith(userSelection: newSelection);
     }
-  }
+    _writeCache(newSelection);
 
-  Future<void> removeAttendance(String userId) async {
     try {
       final parsed = _parseMealKey();
-      final attendanceRef = _database
-          .child('attendance')
-          .child(parsed['date']!)
-          .child(parsed['meal']!)
-          .child(userId);
-
-      await attendanceRef.remove();
-      if (mounted) {
-        state = state.copyWith(userSelection: RsvpOption.none);
-      }
-    } catch (e) {
-      print('Error removing attendance: $e');
-    }
-  }
-
-  Future<void> checkUserAttendance(String userId) async {
-    try {
-      final parsed = _parseMealKey();
-      final snapshot = await _database
+      await _database
           .child('attendance')
           .child(parsed['date']!)
           .child(parsed['meal']!)
           .child(userId)
-          .get();
-
-      if (mounted) {
-        if (snapshot.exists) {
-          final data = Map<String, dynamic>.from(snapshot.value as Map);
-          final isAttending = data['isAttending'] as bool? ?? false;
-          state = state.copyWith(
-            userSelection: isAttending ? RsvpOption.yes : RsvpOption.no,
-            isLoading: false,
-          );
-        } else {
-          state = state.copyWith(
-            userSelection: RsvpOption.none,
-            isLoading: false,
-          );
-        }
-      }
+          .set({
+        'isAttending': isAttending,
+        'name': userName,
+        'email': userEmail,
+        'timestamp': ServerValue.timestamp,
+      });
     } catch (e) {
-      print('Error checking user attendance: $e');
-      if (mounted) {
-        state = state.copyWith(isLoading: false);
-      }
+      // Rollback on failure — restore previous state and cache
+      if (mounted) state = previousState;
+      _writeCache(previousState.userSelection);
+      // Rethrow so the UI layer can optionally show a snackbar
+      rethrow;
+    } finally {
+      _isUpdating = false;
     }
+  }
+
+  Future<void> removeAttendance(String userId) async {
+    if (_isUpdating) return;
+    _isUpdating = true;
+
+    final previousState = state;
+
+    // Optimistic
+    if (mounted) {
+      state = state.copyWith(userSelection: RsvpOption.none);
+    }
+    _writeCache(RsvpOption.none);
+
+    try {
+      final parsed = _parseMealKey();
+      await _database
+          .child('attendance')
+          .child(parsed['date']!)
+          .child(parsed['meal']!)
+          .child(userId)
+          .remove();
+    } catch (e) {
+      if (mounted) state = previousState;
+      _writeCache(previousState.userSelection);
+      rethrow;
+    } finally {
+      _isUpdating = false;
+    }
+  }
+
+  // ── Cache helpers ─────────────────────────────────────────────────────────
+
+  Future<void> _writeCache(RsvpOption selection) async {
+    if (_userId == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_cacheKey, _selectionToString(selection));
+    } catch (_) {}
+  }
+
+  String _selectionToString(RsvpOption s) => switch (s) {
+    RsvpOption.yes  => 'yes',
+    RsvpOption.no   => 'no',
+    RsvpOption.none => 'none',
+  };
+
+  RsvpOption _selectionFromString(String s) => switch (s) {
+    'yes' => RsvpOption.yes,
+    'no'  => RsvpOption.no,
+    _     => RsvpOption.none,
+  };
+
+  // ── Misc helpers ──────────────────────────────────────────────────────────
+
+  Map<String, String> _parseMealKey() {
+    final parts = _mealKey.split('_');
+    return {'date': parts[0], 'meal': parts[1]};
   }
 
   @override
@@ -353,8 +374,50 @@ class RsvpNotifier extends StateNotifier<RsvpState> {
   }
 }
 
-// Helper to create meal key from MealInfo
+// ─── Helper ───────────────────────────────────────────────────────────────
+
 String createMealKey(MealInfo mealInfo) {
   final dateStr = DateFormat('yyyy-MM-dd').format(mealInfo.dateTime);
   return '${dateStr}_${mealInfo.name}';
 }
+
+// ─── Dedicated live attendees stream ─────────────────────────────────────
+//
+// Bypasses the StateNotifier entirely — pipes Firebase onValue directly to
+// whoever is watching. Used by the dialog so it always reflects the live DB
+// state, independent of any optimistic update or caching logic in RsvpNotifier.
+
+final attendeesStreamProvider = StreamProvider.autoDispose
+    .family<List<AttendeeInfo>, String>((ref, mealKey) {
+  final parts = mealKey.split('_');
+  final date = parts[0];
+  final meal = parts[1];
+
+  final dbRef = FirebaseDatabase.instance
+      .ref()
+      .child('attendance')
+      .child(date)
+      .child(meal);
+
+  return dbRef.onValue.map((event) {
+    if (event.snapshot.value == null) return <AttendeeInfo>[];
+
+    final data = Map<String, dynamic>.from(event.snapshot.value as Map);
+    final attendees = <AttendeeInfo>[];
+
+    data.forEach((uid, userData) {
+      final userMap = Map<String, dynamic>.from(userData as Map);
+      final isAttending = userMap['isAttending'] as bool? ?? false;
+      if (isAttending) {
+        attendees.add(AttendeeInfo(
+          name: userMap['name'] as String? ?? 'Unknown',
+          email: userMap['email'] as String? ?? '',
+        ));
+      }
+    });
+
+    // Sort alphabetically so the list order is stable as people join/leave
+    attendees.sort((a, b) => a.name.compareTo(b.name));
+    return attendees;
+  });
+});
