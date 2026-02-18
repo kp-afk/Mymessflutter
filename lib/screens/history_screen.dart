@@ -84,7 +84,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
           if (mealScheduleState.currentMeal == null &&
               mealScheduleState.previousMeal == null) ...[
             Card(
-              color: Theme.of(context).colorScheme.surfaceVariant,
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
               child: Padding(
                 padding: const EdgeInsets.all(48),
                 child: Center(

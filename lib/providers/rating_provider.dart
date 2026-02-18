@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../models/meal_data.dart';
 import '../models/rating_data.dart';
 import '../repositories/rating_repository.dart';
 import 'auth_provider.dart';

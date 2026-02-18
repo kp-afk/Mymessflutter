@@ -84,7 +84,7 @@ class _ComplaintScreenState extends ConsumerState<ComplaintScreen> {
 
                   // Category Dropdown
                   DropdownButtonFormField<String>(
-                    value: complaintState.selectedCategory,
+                    initialValue: complaintState.selectedCategory,
                     decoration: const InputDecoration(
                       labelText: 'Category',
                       border: OutlineInputBorder(),

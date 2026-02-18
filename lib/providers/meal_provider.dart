@@ -57,7 +57,7 @@ class MealNotifier extends StateNotifier<MealScheduleState> {
     final now = DateTime.now();
     final dateFormat = DateFormat('HH:mm');
 
-    MealInfo? _getMealInfo(int dayOfWeek, String mealType, Menu menu, DateTime date) {
+    MealInfo? getMealInfo(int dayOfWeek, String mealType, Menu menu, DateTime date) {
       Meal? meal;
       switch (mealType) {
         case 'Breakfast':
@@ -102,7 +102,7 @@ class MealNotifier extends StateNotifier<MealScheduleState> {
         orElse: () => menuList.first,
       );
       for (final type in ['Breakfast', 'Lunch', 'Dinner']) {
-        final info = _getMealInfo(date.weekday, type, menu, date);
+        final info = getMealInfo(date.weekday, type, menu, date);
         if (info != null) meals.add(info);
       }
     }
