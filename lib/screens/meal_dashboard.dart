@@ -1,138 +1,188 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../models/meal_data.dart';
 import '../providers/meal_provider.dart';
 import '../providers/auth_provider.dart';
 
-class MealDashboard extends ConsumerWidget {
-  const MealDashboard({super.key});
+// ═════════════════════════════════════════════════════════════════════════════
+// PHYSICS DROP-IN
+// Entrance animation: widget starts at [initialScale] + [verticalOffset] above
+// its rest position, then slams into place driven by a SpringSimulation.
+// Opacity is 1.0 the entire time — no fade whatsoever.
+// ═════════════════════════════════════════════════════════════════════════════
+
+class PhysicsDropIn extends StatefulWidget {
+  final Widget child;
+
+  /// Spring stiffness — higher = faster snap. Try 80 (lazy) → 400 (snappy).
+  final double tension;
+
+  /// Damping — higher = fewer bounces. Try 8 (rubbery) → 30 (firm thud).
+  final double friction;
+
+  /// Scale the widget starts at. 2.0 reads as "thrown from above".
+  final double initialScale;
+
+  /// How far above its rest position the widget starts (in logical pixels).
+  /// null = automatically use the full screen height so the widget begins
+  /// completely off-screen above the top edge.
+  final double? verticalOffset;
+
+  /// Fire HapticFeedback.heavyImpact() at the perceptual "landing" moment.
+  final bool haptic;
+
+  /// Optional delay for staggering multiple widgets.
+  final Duration delay;
+
+  const PhysicsDropIn({
+    super.key,
+    required this.child,
+    this.tension = 200.0,
+    this.friction = 16.0,
+    this.initialScale = 2.0,
+    this.verticalOffset,   // null → auto full-screen height
+    this.haptic = true,
+    this.delay = Duration.zero,
+  });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final mealScheduleState = ref.watch(mealProvider);
-    final now = DateTime.now();
-    final greeting = _getGreeting(now.hour);
-    final dateStr = DateFormat('EEEE, MMM d').format(now);
-    final cs = Theme.of(context).colorScheme;
+  State<PhysicsDropIn> createState() => _PhysicsDropInState();
+}
 
-    return Scaffold(
-      backgroundColor: cs.surface,
-      body: CustomScrollView(
-        slivers: [
-          // ── App Bar ──────────────────────────────────────────────────────
-          // The SliverAppBar title (collapsed state) and the FlexibleSpaceBar
-          // background (expanded state) are SEPARATE — no overlap.
-          SliverAppBar(
-            expandedHeight: 140,
-            pinned: true,
-            elevation: 0,
-            scrolledUnderElevation: 0.5,
-            backgroundColor: cs.surface,
-            surfaceTintColor: cs.surfaceTint,
-            // Collapsed title — only visible when scrolled up
-            title: Text(
-              'Anusha Mess',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: cs.onSurface,
-                letterSpacing: -0.2,
-              ),
-            ),
-            centerTitle: false,
-            flexibleSpace: FlexibleSpaceBar(
-              // ⚠️ No title property here — that's what caused the overlap.
-              // The collapsed title comes from SliverAppBar.title above.
-              collapseMode: CollapseMode.pin,
-              background: SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Text(
-                        greeting,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: cs.onSurfaceVariant,
-                          letterSpacing: 0.1,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        'Anusha Mess',
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: cs.onSurface,
-                          letterSpacing: -0.8,
-                          height: 1.1,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        dateStr,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: cs.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
+class _PhysicsDropInState extends State<PhysicsDropIn>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scale;
+  late Animation<double> _dy;
+  bool _hasFiredHaptic = false;
 
-          // ── Content ───────────────────────────────────────────────────────
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                if (mealScheduleState.currentMeal != null) ...[
-                  _CurrentMealCard(meal: mealScheduleState.currentMeal!),
-                  const SizedBox(height: 12),
-                ],
+  @override
+  void initState() {
+    super.initState();
 
-                if (mealScheduleState.currentMeal == null &&
-                    mealScheduleState.nextMeal != null) ...[
-                  _UpNextMealCard(
-                    meal: mealScheduleState.nextMeal!,
-                    showRsvp: true,
-                  ),
-                ] else if (mealScheduleState.currentMeal != null &&
-                    mealScheduleState.nextMeal != null) ...[
-                  _UpNextMealCard(
-                    meal: mealScheduleState.nextMeal!,
-                    showRsvp: false,
-                  ),
-                ],
+    // upperBound > 1.0 so spring overshoot isn't clamped.
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+      upperBound: 1.5,
+    );
 
-                if (mealScheduleState.nextToNextMeal != null) ...[
-                  const SizedBox(height: 12),
-                  _ComingUpCard(meal: mealScheduleState.nextToNextMeal!),
-                ],
+    final spring = SpringDescription(
+      mass: 1.0,
+      stiffness: widget.tension,
+      damping: widget.friction,
+    );
 
-                if (mealScheduleState.currentMeal == null &&
-                    mealScheduleState.nextMeal == null) ...[
-                  const SizedBox(height: 40),
-                  const _EmptyStateCard(),
-                ],
-              ]),
-            ),
-          ),
-        ],
+    _scale = _controller
+        .drive(Tween<double>(begin: widget.initialScale, end: 1.0));
+
+    // _dy is initialised in didChangeDependencies once we have MediaQuery.
+    _dy = _controller.drive(Tween<double>(begin: 0.0, end: 0.0));
+
+    _controller.addListener(() {
+      if (!widget.haptic || _hasFiredHaptic) return;
+      if (_controller.value >= 0.88) {
+        _hasFiredHaptic = true;
+        HapticFeedback.heavyImpact();
+      }
+    });
+
+    Future.delayed(widget.delay, () {
+      if (mounted) _controller.animateWith(SpringSimulation(spring, 0.0, 1.0, 0.0));
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Resolve the start offset now that we have MediaQuery.
+    // We use the full screen height so the widget genuinely begins above the
+    // top edge regardless of where it is positioned on screen.
+    final screenH = MediaQuery.of(context).size.height;
+    final offset  = -(widget.verticalOffset ?? screenH);
+    _dy = _controller.drive(Tween<double>(begin: offset, end: 0.0));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) => Transform.translate(
+        offset: Offset(0.0, _dy.value),
+        child: ScaleTransition(scale: _scale, child: child),
+      ),
+      child: widget.child,
+    );
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PRESS-SCALE WRAPPER
+// Squeezes to 93% on press, springs back on release. Listener-based so it
+// never steals tap events from child buttons.
+// ═════════════════════════════════════════════════════════════════════════════
+
+class _TapScale extends StatefulWidget {
+  final Widget child;
+  const _TapScale({required this.child});
+
+  @override
+  State<_TapScale> createState() => _TapScaleState();
+}
+
+class _TapScaleState extends State<_TapScale>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+      reverseDuration: const Duration(milliseconds: 380),
+    );
+    _scale = Tween<double>(begin: 1.0, end: 0.93).animate(
+      CurvedAnimation(
+        parent: _ctrl,
+        curve: Curves.easeIn,
+        reverseCurve: Curves.elasticOut,
       ),
     );
   }
 
-  String _getGreeting(int hour) {
-    if (hour < 12) return 'Good morning 👋';
-    if (hour < 17) return 'Good afternoon 👋';
-    return 'Good evening 👋';
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
   }
+
+  @override
+  Widget build(BuildContext context) => Listener(
+    onPointerDown: (_) {
+      HapticFeedback.lightImpact();
+      _ctrl.forward();
+    },
+    onPointerUp: (_) => _ctrl.reverse(),
+    onPointerCancel: (_) => _ctrl.reverse(),
+    child: ScaleTransition(scale: _scale, child: widget.child),
+  );
 }
 
-// ─── Shared helpers ───────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
+// SHARED HELPERS
+// ═════════════════════════════════════════════════════════════════════════════
 
 ShapeBorder _cardShape({double radius = 20}) =>
     RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius));
@@ -141,7 +191,6 @@ class _SectionLabel extends StatelessWidget {
   final String text;
   final IconData icon;
   final Color? color;
-
   const _SectionLabel({required this.text, required this.icon, this.color});
 
   @override
@@ -173,7 +222,7 @@ class _MealItemRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 2.5),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -201,7 +250,241 @@ class _MealItemRow extends StatelessWidget {
   }
 }
 
-// ─── Current Meal Card ────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
+// DASHBOARD
+// ═════════════════════════════════════════════════════════════════════════════
+
+class MealDashboard extends ConsumerStatefulWidget {
+  const MealDashboard({super.key});
+
+  @override
+  ConsumerState<MealDashboard> createState() => _MealDashboardState();
+}
+
+class _MealDashboardState extends ConsumerState<MealDashboard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _headerCtrl;
+  late Animation<double> _headerScale;
+  late Animation<double> _headerDy;
+  bool _headerHapticFired = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _headerCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+      upperBound: 1.5,
+    );
+
+    // Softer spring than the cards — feels like a separate, lighter layer.
+    final spring = SpringDescription(mass: 1.0, stiffness: 160.0, damping: 18.0);
+
+    _headerScale = _headerCtrl.drive(Tween<double>(begin: 1.35, end: 1.0));
+    // _headerDy resolved in didChangeDependencies once MediaQuery is available.
+    _headerDy    = _headerCtrl.drive(Tween<double>(begin: 0.0, end: 0.0));
+
+    _headerCtrl.addListener(() {
+      if (!_headerHapticFired && _headerCtrl.value >= 0.88) {
+        _headerHapticFired = true;
+        HapticFeedback.mediumImpact();
+      }
+    });
+
+    _headerCtrl.animateWith(SpringSimulation(spring, 0.0, 1.0, 0.0));
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final screenH = MediaQuery.of(context).size.height;
+    _headerDy = _headerCtrl.drive(Tween<double>(begin: -screenH, end: 0.0));
+
+  }
+
+  @override
+  void dispose() {
+    _headerCtrl.dispose();
+    super.dispose();
+  }
+
+  String _getGreeting(int hour) {
+    if (hour < 12) return 'Good morning 👋';
+    if (hour < 17) return 'Good afternoon 👋';
+    return 'Good evening 👋';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mealScheduleState = ref.watch(mealProvider);
+    final authState = ref.watch(authStateProvider);
+    final now      = DateTime.now();
+    final greeting = _getGreeting(now.hour);
+    final dateStr  = DateFormat('EEEE, MMM d').format(now);
+    final cs       = Theme.of(context).colorScheme;
+
+    final userName = authState.whenOrNull(
+      data: (user) => user?.displayName ?? user?.email?.split('@')[0],
+    ) ?? 'Please Sign In';
+
+    return Scaffold(
+      backgroundColor: cs.surface,
+      body: CustomScrollView(
+        slivers: [
+
+          // ── App Bar ──────────────────────────────────────────────────────
+          SliverAppBar(
+            expandedHeight: 160,
+            pinned: true,
+            elevation: 0,
+            scrolledUnderElevation: 0.5,
+            backgroundColor: cs.surface,
+            surfaceTintColor: cs.surfaceTint,
+            title: AnimatedBuilder(
+              animation: _headerCtrl,
+              builder: (_, child) => Transform.translate(
+                offset: Offset(0, _headerDy.value * 0.5),
+                child: ScaleTransition(scale: _headerScale, child: child),
+              ),
+              child: Text(
+                'Anusha Mess',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: cs.onSurface,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ),
+            centerTitle: false,
+            flexibleSpace: FlexibleSpaceBar(
+              collapseMode: CollapseMode.parallax,
+              background: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 4, 24, 12),
+                  child: AnimatedBuilder(
+                    animation: _headerCtrl,
+                    builder: (_, child) => Transform.translate(
+                      offset: Offset(0, _headerDy.value),
+                      child: ScaleTransition(scale: _headerScale, child: child),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Text(
+                          greeting,
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: cs.onSurfaceVariant,
+                            letterSpacing: 0.1,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          userName,
+                          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: cs.onSurface,
+                            letterSpacing: -0.8,
+                            height: 1.1,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          dateStr,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // ── Content ───────────────────────────────────────────────────────
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+
+                // Current meal — snappiest drop, first in.
+                if (mealScheduleState.currentMeal != null) ...[
+                  PhysicsDropIn(
+                    tension: 220,
+                    friction: 18,
+                    initialScale: 2.0,
+                    delay: const Duration(milliseconds: 60),
+                    child: _CurrentMealCard(meal: mealScheduleState.currentMeal!),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
+                // Up Next — slightly softer, cascades after current.
+                if (mealScheduleState.currentMeal == null &&
+                    mealScheduleState.nextMeal != null) ...[
+                  PhysicsDropIn(
+                    tension: 200,
+                    friction: 16,
+                    initialScale: 2.0,
+                    delay: const Duration(milliseconds: 60),
+                    child: _UpNextMealCard(
+                      meal: mealScheduleState.nextMeal!,
+                      showRsvp: true,
+                    ),
+                  ),
+                ] else if (mealScheduleState.currentMeal != null &&
+                    mealScheduleState.nextMeal != null) ...[
+                  PhysicsDropIn(
+                    tension: 200,
+                    friction: 16,
+                    initialScale: 2.0,
+                    delay: const Duration(milliseconds: 170),
+                    child: _UpNextMealCard(
+                      meal: mealScheduleState.nextMeal!,
+                      showRsvp: false,
+                    ),
+                  ),
+                ],
+
+                // Coming Up — lightest card, smallest drop, longest delay.
+                if (mealScheduleState.nextToNextMeal != null) ...[
+                  const SizedBox(height: 12),
+                  PhysicsDropIn(
+                    tension: 180,
+                    friction: 15,
+                    initialScale: 1.7,
+                    delay: const Duration(milliseconds: 280),
+                    child: _ComingUpCard(meal: mealScheduleState.nextToNextMeal!),
+                  ),
+                ],
+
+                // Empty state.
+                if (mealScheduleState.currentMeal == null &&
+                    mealScheduleState.nextMeal == null) ...[
+                  const SizedBox(height: 40),
+                  PhysicsDropIn(
+                    tension: 160,
+                    friction: 14,
+                    initialScale: 1.8,
+                    delay: const Duration(milliseconds: 60),
+                    child: const _EmptyStateCard(),
+                  ),
+                ],
+              ]),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// CURRENT MEAL CARD
+// ═════════════════════════════════════════════════════════════════════════════
 
 class _CurrentMealCard extends ConsumerWidget {
   final MealInfo meal;
@@ -215,7 +498,7 @@ class _CurrentMealCard extends ConsumerWidget {
       shape: _cardShape(),
       color: cs.primaryContainer,
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -224,7 +507,7 @@ class _CurrentMealCard extends ConsumerWidget {
               icon: Icons.restaurant_rounded,
               color: cs.onPrimaryContainer.withValues(alpha: 0.75),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
             Text(
               meal.name,
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -233,9 +516,9 @@ class _CurrentMealCard extends ConsumerWidget {
                 letterSpacing: -0.4,
               ),
             ),
-            const SizedBox(height: 14),
-            Divider(color: cs.onPrimaryContainer.withValues(alpha: 0.10), height: 1),
             const SizedBox(height: 10),
+            Divider(color: cs.onPrimaryContainer.withValues(alpha: 0.10), height: 1),
+            const SizedBox(height: 8),
             ...meal.items.map((item) => _MealItemRow(item: item)),
             const SizedBox(height: 4),
             _RsvpSection(mealInfo: meal),
@@ -246,7 +529,9 @@ class _CurrentMealCard extends ConsumerWidget {
   }
 }
 
-// ─── Up Next Meal Card ────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
+// UP NEXT CARD
+// ═════════════════════════════════════════════════════════════════════════════
 
 class _UpNextMealCard extends ConsumerWidget {
   final MealInfo meal;
@@ -261,7 +546,7 @@ class _UpNextMealCard extends ConsumerWidget {
       shape: _cardShape(),
       color: cs.surfaceContainerLow,
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -277,7 +562,7 @@ class _UpNextMealCard extends ConsumerWidget {
                 _CountdownChip(targetDateTime: meal.dateTime),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
             Text(
               meal.name,
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -286,9 +571,9 @@ class _UpNextMealCard extends ConsumerWidget {
                 letterSpacing: -0.4,
               ),
             ),
-            const SizedBox(height: 14),
-            Divider(color: cs.outlineVariant.withValues(alpha: 0.5), height: 1),
             const SizedBox(height: 10),
+            Divider(color: cs.outlineVariant.withValues(alpha: 0.5), height: 1),
+            const SizedBox(height: 8),
             ...meal.items.map((item) => _MealItemRow(item: item)),
             if (showRsvp) ...[
               const SizedBox(height: 4),
@@ -301,7 +586,9 @@ class _UpNextMealCard extends ConsumerWidget {
   }
 }
 
-// ─── Coming Up Card ───────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
+// COMING UP CARD
+// ═════════════════════════════════════════════════════════════════════════════
 
 class _ComingUpCard extends StatelessWidget {
   final MealInfo meal;
@@ -347,7 +634,9 @@ class _ComingUpCard extends StatelessWidget {
   }
 }
 
-// ─── Empty State ──────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
+// EMPTY STATE
+// ═════════════════════════════════════════════════════════════════════════════
 
 class _EmptyStateCard extends StatelessWidget {
   const _EmptyStateCard();
@@ -380,7 +669,9 @@ class _EmptyStateCard extends StatelessWidget {
   }
 }
 
-// ─── Countdown Chip ───────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
+// COUNTDOWN CHIP
+// ═════════════════════════════════════════════════════════════════════════════
 
 class _CountdownChip extends StatefulWidget {
   final DateTime targetDateTime;
@@ -398,8 +689,7 @@ class _CountdownChipState extends State<_CountdownChip> {
   void initState() {
     super.initState();
     _updateTimeLeft();
-    _timer = Timer.periodic(
-        const Duration(minutes: 1), (_) => _updateTimeLeft());
+    _timer = Timer.periodic(const Duration(minutes: 1), (_) => _updateTimeLeft());
   }
 
   void _updateTimeLeft() {
@@ -422,31 +712,37 @@ class _CountdownChipState extends State<_CountdownChip> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: cs.secondaryContainer,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.timer_outlined, size: 12, color: cs.onSecondaryContainer),
-          const SizedBox(width: 4),
-          Text(
-            _timeLeft,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: cs.onSecondaryContainer,
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      child: Container(
+        key: ValueKey(_timeLeft),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: cs.secondaryContainer,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.timer_outlined, size: 12, color: cs.onSecondaryContainer),
+            const SizedBox(width: 4),
+            Text(
+              _timeLeft,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: cs.onSecondaryContainer,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-// ─── RSVP Section ─────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
+// RSVP SECTION
+// ═════════════════════════════════════════════════════════════════════════════
 
 class _RsvpSection extends ConsumerWidget {
   final MealInfo mealInfo;
@@ -456,14 +752,20 @@ class _RsvpSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final mealKey = createMealKey(mealInfo);
+    final mealKey  = createMealKey(mealInfo);
     final rsvpState = ref.watch(rsvpProvider(mealKey));
     final authState = ref.watch(authStateProvider);
-    final cs = Theme.of(context).colorScheme;
+    final cs        = Theme.of(context).colorScheme;
 
     return authState.when(
       data: (user) {
         final isSignedIn = user != null;
+
+        final String actionKey;
+        if (!isSignedIn)                              actionKey = 'sign-in';
+        else if (rsvpState.isLoading)                 actionKey = 'loading';
+        else if (rsvpState.userSelection == RsvpOption.none) actionKey = 'buttons';
+        else                                          actionKey = 'sel-${rsvpState.userSelection}';
 
         return Container(
           margin: const EdgeInsets.only(top: 18),
@@ -486,54 +788,94 @@ class _RsvpSection extends ConsumerWidget {
               ),
               const SizedBox(height: 14),
 
-              // Action area
-              if (!isSignedIn)
-                _buildSignInPrompt(context, cs)
-              else if (rsvpState.isLoading)
-                const Center(
-                  child: SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+              // Action area crossfades between: prompt / spinner / buttons / pill.
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeIn,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, 0.06),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
                   ),
-                )
-              else if (rsvpState.userSelection == RsvpOption.none)
-                  _buildButtons(context, ref, user, mealKey, cs)
-                else
-                  _buildSelectionState(
-                      context, ref, user, mealKey, rsvpState, cs),
+                ),
+                child: KeyedSubtree(
+                  key: ValueKey(actionKey),
+                  child: !isSignedIn
+                      ? _buildSignInPrompt(context, cs)
+                      : rsvpState.isLoading
+                      ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 4),
+                      child: SizedBox(
+                        width: 22, height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  )
+                      : rsvpState.userSelection == RsvpOption.none
+                      ? _buildButtons(context, ref, user, mealKey, cs)
+                      : _buildSelectionState(context, ref, user, mealKey, rsvpState, cs),
+                ),
+              ),
 
-              const SizedBox(height: 16),
-              Divider(color: cs.outlineVariant.withValues(alpha: 0.4), height: 1),
               const SizedBox(height: 12),
+              Divider(color: cs.outlineVariant.withValues(alpha: 0.4), height: 1),
+              const SizedBox(height: 8),
 
-              // Attendance stats
+              // Count flips vertically on change.
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    '${rsvpState.yesCount} attending',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: cs.onSurface,
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 350),
+                    transitionBuilder: (child, anim) => FadeTransition(
+                      opacity: anim,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, -0.5),
+                          end: Offset.zero,
+                        ).animate(anim),
+                        child: child,
+                      ),
+                    ),
+                    child: Text(
+                      '${rsvpState.yesCount} attending',
+                      key: ValueKey(rsvpState.yesCount),
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: cs.onSurface,
+                      ),
                     ),
                   ),
                   Text(
                     'of $totalStudents students',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: cs.onSurfaceVariant,
-                    ),
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelSmall
+                        ?.copyWith(color: cs.onSurfaceVariant),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: LinearProgressIndicator(
-                  value: rsvpState.yesCount / totalStudents,
-                  minHeight: 6,
-                  backgroundColor: cs.surfaceContainerHighest,
-                  valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+              const SizedBox(height: 6),
+
+              // Progress bar smoothly fills.
+              TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0.0, end: rsvpState.yesCount / totalStudents),
+                duration: const Duration(milliseconds: 700),
+                curve: Curves.easeOutCubic,
+                builder: (ctx, value, _) => ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: LinearProgressIndicator(
+                    value: value,
+                    minHeight: 6,
+                    backgroundColor: cs.surfaceContainerHighest,
+                    valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+                  ),
                 ),
               ),
 
@@ -542,14 +884,12 @@ class _RsvpSection extends ConsumerWidget {
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
-                    onPressed: () => _showAttendeesDialog(
-                        context, mealInfo.name),
+                    onPressed: () => _showAttendeesDialog(context, mealInfo.name),
                     style: TextButton.styleFrom(
                       foregroundColor: cs.primary,
                       padding: const EdgeInsets.symmetric(horizontal: 4),
                       minimumSize: const Size(0, 32),
-                      textStyle: const TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.w600),
+                      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                     ),
                     child: const Text("See who's going →"),
                   ),
@@ -563,8 +903,7 @@ class _RsvpSection extends ConsumerWidget {
         padding: EdgeInsets.symmetric(vertical: 20),
         child: Center(
           child: SizedBox(
-            width: 22,
-            height: 22,
+            width: 22, height: 22,
             child: CircularProgressIndicator(strokeWidth: 2),
           ),
         ),
@@ -572,8 +911,7 @@ class _RsvpSection extends ConsumerWidget {
       error: (e, _) => Padding(
         padding: const EdgeInsets.all(16),
         child: Text('Error: $e',
-            style: TextStyle(
-                color: Theme.of(context).colorScheme.error)),
+            style: TextStyle(color: Theme.of(context).colorScheme.error)),
       ),
     );
   }
@@ -582,14 +920,14 @@ class _RsvpSection extends ConsumerWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(Icons.lock_outline_rounded,
-            size: 14, color: cs.onSurfaceVariant),
+        Icon(Icons.lock_outline_rounded, size: 14, color: cs.onSurfaceVariant),
         const SizedBox(width: 6),
         Text(
           'Sign in to RSVP',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: cs.onSurfaceVariant,
-          ),
+          style: Theme.of(context)
+              .textTheme
+              .bodySmall
+              ?.copyWith(color: cs.onSurfaceVariant),
         ),
       ],
     );
@@ -605,49 +943,39 @@ class _RsvpSection extends ConsumerWidget {
     return Row(
       children: [
         Expanded(
-          child: FilledButton.icon(
-            onPressed: () => ref
-                .read(rsvpProvider(mealKey).notifier)
-                .updateAttendance(
-              true,
-              user.uid,
-              user.displayName ?? 'User',
-              user.email ?? '',
-            ),
-            icon: const Icon(Icons.check_rounded, size: 16),
-            label: const Text("I'm in"),
-            style: FilledButton.styleFrom(
-              backgroundColor: cs.primary,
-              foregroundColor: cs.onPrimary,
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              textStyle: const TextStyle(
-                  fontWeight: FontWeight.w600, fontSize: 13),
+          child: _TapScale(
+            child: FilledButton.icon(
+              onPressed: () => ref
+                  .read(rsvpProvider(mealKey).notifier)
+                  .updateAttendance(true, user.uid, user.displayName ?? 'User', user.email ?? ''),
+              icon: const Icon(Icons.check_rounded, size: 16),
+              label: const Text("I'm in"),
+              style: FilledButton.styleFrom(
+                backgroundColor: cs.primary,
+                foregroundColor: cs.onPrimary,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              ),
             ),
           ),
         ),
         const SizedBox(width: 10),
         Expanded(
-          child: OutlinedButton.icon(
-            onPressed: () => ref
-                .read(rsvpProvider(mealKey).notifier)
-                .updateAttendance(
-              false,
-              user.uid,
-              user.displayName ?? 'User',
-              user.email ?? '',
-            ),
-            icon: const Icon(Icons.close_rounded, size: 16),
-            label: const Text('Skipping'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: cs.onSurfaceVariant,
-              side: BorderSide(color: cs.outline.withValues(alpha: 0.5)),
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              textStyle: const TextStyle(
-                  fontWeight: FontWeight.w600, fontSize: 13),
+          child: _TapScale(
+            child: OutlinedButton.icon(
+              onPressed: () => ref
+                  .read(rsvpProvider(mealKey).notifier)
+                  .updateAttendance(false, user.uid, user.displayName ?? 'User', user.email ?? ''),
+              icon: const Icon(Icons.close_rounded, size: 16),
+              label: const Text('Skipping'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: cs.onSurfaceVariant,
+                side: BorderSide(color: cs.outline.withValues(alpha: 0.5)),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              ),
             ),
           ),
         ),
@@ -666,49 +994,59 @@ class _RsvpSection extends ConsumerWidget {
     final isYes = rsvpState.userSelection == RsvpOption.yes;
     return Column(
       children: [
-        Container(
-          padding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            color: isYes ? cs.primaryContainer : cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                isYes
-                    ? Icons.check_circle_rounded
-                    : Icons.cancel_rounded,
-                size: 15,
-                color: isYes
-                    ? cs.onPrimaryContainer
-                    : cs.onSurfaceVariant,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                isYes ? "You're going!" : 'Skipping this one',
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: isYes
-                      ? cs.onPrimaryContainer
-                      : cs.onSurfaceVariant,
+        // Confirmation pill bounces in with elasticOut; key re-triggers on toggle.
+        TweenAnimationBuilder<double>(
+          key: ValueKey(rsvpState.userSelection),
+          tween: Tween(begin: 0.0, end: 1.0),
+          duration: const Duration(milliseconds: 550),
+          curve: Curves.elasticOut,
+          builder: (ctx, v, child) => Transform.scale(scale: v, child: child),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: isYes ? cs.primaryContainer : cs.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Icon pops in with easeOutBack overshoot.
+                TweenAnimationBuilder<double>(
+                  key: ValueKey(rsvpState.userSelection),
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  duration: const Duration(milliseconds: 420),
+                  curve: Curves.easeOutBack,
+                  builder: (ctx, v, child) => Transform.scale(scale: v, child: child),
+                  child: Icon(
+                    isYes ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                    size: 15,
+                    color: isYes ? cs.onPrimaryContainer : cs.onSurfaceVariant,
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 6),
+                Text(
+                  isYes ? "You're going!" : 'Skipping this one',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: isYes ? cs.onPrimaryContainer : cs.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 6),
-        TextButton(
-          onPressed: () => ref
-              .read(rsvpProvider(mealKey).notifier)
-              .removeAttendance(user.uid),
-          style: TextButton.styleFrom(
-            foregroundColor: cs.onSurfaceVariant,
-            textStyle: const TextStyle(fontSize: 12),
-            minimumSize: const Size(0, 30),
+        _TapScale(
+          child: TextButton(
+            onPressed: () =>
+                ref.read(rsvpProvider(mealKey).notifier).removeAttendance(user.uid),
+            style: TextButton.styleFrom(
+              foregroundColor: cs.onSurfaceVariant,
+              textStyle: const TextStyle(fontSize: 12),
+              minimumSize: const Size(0, 30),
+            ),
+            child: const Text('Change my response'),
           ),
-          child: const Text('Change my response'),
         ),
       ],
     );
@@ -717,8 +1055,6 @@ class _RsvpSection extends ConsumerWidget {
   void _showAttendeesDialog(BuildContext context, String mealName) {
     showDialog(
       context: context,
-      // ProviderScope is already above — we just need a ConsumerWidget inside
-      // the dialog so it can watch the provider and rebuild on every push.
       builder: (context) => _AttendeesDialog(
         mealKey: createMealKey(mealInfo),
         mealName: mealName,
@@ -727,21 +1063,17 @@ class _RsvpSection extends ConsumerWidget {
   }
 }
 
-// ─── Live attendees dialog ────────────────────────────────────────────────
-// Watches rsvpProvider directly so the list rebuilds the instant Firebase
-// pushes a change — no need to close and reopen.
+// ═════════════════════════════════════════════════════════════════════════════
+// LIVE ATTENDEES DIALOG
+// ═════════════════════════════════════════════════════════════════════════════
 
 class _AttendeesDialog extends ConsumerWidget {
   final String mealKey;
   final String mealName;
-
   const _AttendeesDialog({required this.mealKey, required this.mealName});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Watch the dedicated stream provider — it's a direct Firebase onValue pipe
-    // so additions AND removals are reflected instantly without going through
-    // the StateNotifier or any optimistic/cached state.
     final attendeesAsync = ref.watch(attendeesStreamProvider(mealKey));
     final cs = Theme.of(context).colorScheme;
 
@@ -754,7 +1086,6 @@ class _AttendeesDialog extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Header ──────────────────────────────────────────────────
             Row(
               children: [
                 Expanded(
@@ -763,9 +1094,10 @@ class _AttendeesDialog extends ConsumerWidget {
                     children: [
                       Text(
                         'Attending $mealName',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleLarge
+                            ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 2),
                       attendeesAsync.when(
@@ -774,9 +1106,10 @@ class _AttendeesDialog extends ConsumerWidget {
                           child: Text(
                             '${attendees.length} student${attendees.length == 1 ? '' : 's'}',
                             key: ValueKey(attendees.length),
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: cs.onSurfaceVariant,
-                            ),
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(color: cs.onSurfaceVariant),
                           ),
                         ),
                         loading: () => const SizedBox.shrink(),
@@ -791,7 +1124,6 @@ class _AttendeesDialog extends ConsumerWidget {
 
             const SizedBox(height: 16),
 
-            // ── List ─────────────────────────────────────────────────────
             ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 320),
               child: attendeesAsync.when(
@@ -799,15 +1131,13 @@ class _AttendeesDialog extends ConsumerWidget {
                   child: Padding(
                     padding: EdgeInsets.symmetric(vertical: 24),
                     child: SizedBox(
-                      width: 24,
-                      height: 24,
+                      width: 24, height: 24,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                   ),
                 ),
                 error: (e, _) => Center(
-                  child: Text('Error: $e',
-                      style: TextStyle(color: cs.error)),
+                  child: Text('Error: $e', style: TextStyle(color: cs.error)),
                 ),
                 data: (attendees) => attendees.isEmpty
                     ? Center(
@@ -831,48 +1161,45 @@ class _AttendeesDialog extends ConsumerWidget {
                   ),
                   itemBuilder: (context, index) {
                     final a = attendees[index];
-                    return Padding(
-                      padding:
-                      const EdgeInsets.symmetric(vertical: 10),
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 16,
-                            backgroundColor: cs.primaryContainer,
-                            child: Text(
-                              a.name.isNotEmpty
-                                  ? a.name[0].toUpperCase()
-                                  : '?',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: cs.onPrimaryContainer,
+                    return _FadeSlideIn(
+                      delay: Duration(milliseconds: 40 * index.clamp(0, 8)),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 16,
+                              backgroundColor: cs.primaryContainer,
+                              child: Text(
+                                a.name.isNotEmpty ? a.name[0].toUpperCase() : '?',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: cs.onPrimaryContainer,
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Column(
-                            crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                a.name,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14),
-                              ),
-                              if (a.email.isNotEmpty)
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
                                 Text(
-                                  a.email.split('@')[0],
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.copyWith(
-                                      color: cs.onSurfaceVariant),
+                                  a.name,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600, fontSize: 14),
                                 ),
-                            ],
-                          ),
-                        ],
+                                if (a.email.isNotEmpty)
+                                  Text(
+                                    a.email.split('@')[0],
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(color: cs.onSurfaceVariant),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   },
@@ -883,13 +1210,15 @@ class _AttendeesDialog extends ConsumerWidget {
             const SizedBox(height: 16),
             Align(
               alignment: Alignment.centerRight,
-              child: FilledButton.tonal(
-                onPressed: () => Navigator.of(context).pop(),
-                style: FilledButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+              child: _TapScale(
+                child: FilledButton.tonal(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: FilledButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('Close'),
                 ),
-                child: const Text('Close'),
               ),
             ),
           ],
@@ -899,7 +1228,66 @@ class _AttendeesDialog extends ConsumerWidget {
   }
 }
 
-// ─── Subtle live indicator ────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
+// FADE + SLIDE-UP
+// Gentle entrance for list items inside dialogs — fades in while rising ~14px.
+// ═════════════════════════════════════════════════════════════════════════════
+
+class _FadeSlideIn extends StatefulWidget {
+  final Widget child;
+  final Duration delay;
+  const _FadeSlideIn({required this.child, this.delay = Duration.zero});
+
+  @override
+  State<_FadeSlideIn> createState() => _FadeSlideInState();
+}
+
+class _FadeSlideInState extends State<_FadeSlideIn>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _opacity;
+  late Animation<double> _dy;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 340),
+    );
+    _opacity = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut)
+        .drive(Tween(begin: 0.0, end: 1.0));
+    _dy = CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic)
+        .drive(Tween(begin: 14.0, end: 0.0));
+
+    Future.delayed(widget.delay, () {
+      if (mounted) _ctrl.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _ctrl,
+    builder: (_, child) => Opacity(
+      opacity: _opacity.value,
+      child: Transform.translate(
+        offset: Offset(0, _dy.value),
+        child: child,
+      ),
+    ),
+    child: widget.child,
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// LIVE DOT
+// ═════════════════════════════════════════════════════════════════════════════
 
 class _LiveDot extends StatefulWidget {
   const _LiveDot();
@@ -908,8 +1296,7 @@ class _LiveDot extends StatefulWidget {
   State<_LiveDot> createState() => _LiveDotState();
 }
 
-class _LiveDotState extends State<_LiveDot>
-    with SingleTickerProviderStateMixin {
+class _LiveDotState extends State<_LiveDot> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _opacity;
 
@@ -940,10 +1327,7 @@ class _LiveDotState extends State<_LiveDot>
           child: Container(
             width: 6,
             height: 6,
-            decoration: BoxDecoration(
-              color: cs.primary,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: cs.primary, shape: BoxShape.circle),
           ),
         ),
         const SizedBox(width: 4),

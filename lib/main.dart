@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -28,17 +29,12 @@ class MyMessApp extends StatelessWidget {
       // ── Light Theme ─────────────────────────────────────────────────────
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          // Warm saffron/amber — fits a food/mess context far better than red,
-          // and produces a pleasant primaryContainer for meal cards.
           seedColor: const Color(0xFFE07B35),
           brightness: Brightness.light,
-          // Slightly warm off-white background so cards (surfaceContainerLow)
-          // read as distinct lifted surfaces in light mode.
           surface: const Color(0xFFFFF8F4),
         ),
         useMaterial3: true,
 
-        // Card defaults — flat, rounded, surface-tinted
         cardTheme: CardThemeData(
           elevation: 0,
           shape: RoundedRectangleBorder(
@@ -47,7 +43,6 @@ class MyMessApp extends StatelessWidget {
           margin: EdgeInsets.zero,
         ),
 
-        // AppBar defaults — transparent, no shadow
         appBarTheme: const AppBarTheme(
           scrolledUnderElevation: 0.5,
           elevation: 0,
@@ -58,28 +53,20 @@ class MyMessApp extends StatelessWidget {
           ),
         ),
 
-        // NavigationBar — compact, uses surface container
         navigationBarTheme: NavigationBarThemeData(
           height: 64,
           elevation: 0,
           labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
           labelTextStyle: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.selected)) {
-              return const TextStyle(
-                  fontSize: 11, fontWeight: FontWeight.w700);
+              return const TextStyle(fontSize: 11, fontWeight: FontWeight.w700);
             }
-            return const TextStyle(
-                fontSize: 11, fontWeight: FontWeight.w500);
+            return const TextStyle(fontSize: 11, fontWeight: FontWeight.w500);
           }),
         ),
 
-        // Divider
-        dividerTheme: const DividerThemeData(
-          space: 0,
-          thickness: 1,
-        ),
+        dividerTheme: const DividerThemeData(space: 0, thickness: 1),
 
-        // Filled buttons — pill shape, consistent
         filledButtonTheme: FilledButtonThemeData(
           style: FilledButton.styleFrom(
             shape: RoundedRectangleBorder(
@@ -87,7 +74,6 @@ class MyMessApp extends StatelessWidget {
           ),
         ),
 
-        // Outlined buttons
         outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(
             shape: RoundedRectangleBorder(
@@ -95,10 +81,8 @@ class MyMessApp extends StatelessWidget {
           ),
         ),
 
-        // Dialog
         dialogTheme: DialogThemeData(
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           elevation: 0,
         ),
       ),
@@ -135,18 +119,13 @@ class MyMessApp extends StatelessWidget {
           labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
           labelTextStyle: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.selected)) {
-              return const TextStyle(
-                  fontSize: 11, fontWeight: FontWeight.w700);
+              return const TextStyle(fontSize: 11, fontWeight: FontWeight.w700);
             }
-            return const TextStyle(
-                fontSize: 11, fontWeight: FontWeight.w500);
+            return const TextStyle(fontSize: 11, fontWeight: FontWeight.w500);
           }),
         ),
 
-        dividerTheme: const DividerThemeData(
-          space: 0,
-          thickness: 1,
-        ),
+        dividerTheme: const DividerThemeData(space: 0, thickness: 1),
 
         filledButtonTheme: FilledButtonThemeData(
           style: FilledButton.styleFrom(
@@ -163,8 +142,7 @@ class MyMessApp extends StatelessWidget {
         ),
 
         dialogTheme: DialogThemeData(
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           elevation: 0,
         ),
       ),
@@ -175,6 +153,14 @@ class MyMessApp extends StatelessWidget {
   }
 }
 
+// ─── Main scaffold ─────────────────────────────────────────────────────────
+//
+// Key insight: screens are NOT in an IndexedStack.
+// Instead, only the active screen is rendered, with a ValueKey composed of
+// (tabIndex + visitCount). Every time you switch to a tab the visitCount
+// increments → new key → Flutter tears down and rebuilds the widget tree →
+// initState fires again → every PhysicsDropIn spring replays from scratch.
+
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -182,24 +168,79 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
+class _MainScreenState extends State<MainScreen>
+    with SingleTickerProviderStateMixin {
   int _currentIndex = 0;
 
-  final List<Widget> _screens = const [
-    MealDashboard(),
-    HistoryScreen(),
-    WastageScreen(),
-    ProfileScreen(),
-  ];
+  // How many times each tab has been visited.
+  // Bump on every switch so the screen gets a fresh key and rebuilds.
+  final Map<int, int> _visitCount = {0: 0, 1: 0, 2: 0, 3: 0};
+
+  // Spring-drives the whole body from 0.92 → 1.0 on each tab switch,
+  // reinforcing the "lands into place" feel.
+  late AnimationController _tabCtrl;
+  late Animation<double> _tabScale;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+      upperBound: 1.5,
+      value: 1.0, // start settled; first screen handles its own spring.
+    );
+    _tabScale = _tabCtrl.drive(Tween<double>(begin: 0.92, end: 1.0));
+  }
+
+  @override
+  void dispose() {
+    _tabCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onTabSelected(int index) {
+    if (index == _currentIndex) return;
+    HapticFeedback.selectionClick();
+
+    setState(() {
+      _currentIndex = index;
+      // New visit count → new ValueKey → screen fully rebuilds → animations replay.
+      _visitCount[index] = (_visitCount[index] ?? 0) + 1;
+    });
+
+    // Body springs into place.
+    _tabCtrl.value = 0.0;
+    _tabCtrl.animateWith(
+      SpringSimulation(
+        SpringDescription(mass: 1.0, stiffness: 300.0, damping: 22.0),
+        0.0, 1.0, 0.0,
+      ),
+    );
+  }
+
+  Widget _buildScreen(int index) {
+    switch (index) {
+      case 0: return const MealDashboard();
+      case 1: return const HistoryScreen();
+      case 2: return const WastageScreen();
+      case 3: return const ProfileScreen();
+      default: return const MealDashboard();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
+      body: ScaleTransition(
+        scale: _tabScale,
+        // ValueKey changes on every tab switch → fresh rebuild → springs replay.
+        child: KeyedSubtree(
+          key: ValueKey('tab-$_currentIndex-${_visitCount[_currentIndex]}'),
+          child: _buildScreen(_currentIndex),
+        ),
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -215,9 +256,7 @@ class _MainScreenState extends State<MainScreen> {
           backgroundColor: cs.surface,
           surfaceTintColor: Colors.transparent,
           shadowColor: Colors.transparent,
-          onDestinationSelected: (index) {
-            setState(() => _currentIndex = index);
-          },
+          onDestinationSelected: _onTabSelected,
           destinations: const [
             NavigationDestination(
               icon: Icon(Icons.home_outlined),
