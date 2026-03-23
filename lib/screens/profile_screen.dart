@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../providers/auth_provider.dart';
 import 'complaint_screen.dart';
+import 'rebate_screen.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -13,6 +14,7 @@ class ProfileScreen extends ConsumerStatefulWidget {
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _showComplaintScreen = false;
+  bool _showRebateScreen = false;
   bool _isSigningIn = false;
 
   @override
@@ -23,6 +25,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       return ComplaintScreen(
         onBack: () {
           setState(() => _showComplaintScreen = false);
+        },
+      );
+    }
+
+    if (_showRebateScreen) {
+      return RebateScreen(
+        onBack: () {
+          setState(() => _showRebateScreen = false);
         },
       );
     }
@@ -54,11 +64,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           child: isSignedIn && user.photoURL != null
               ? CircleAvatar(
             radius: 48,
-            backgroundImage: CachedNetworkImageProvider(user.photoURL!),
+            backgroundImage:
+            CachedNetworkImageProvider(user.photoURL!),
           )
               : CircleAvatar(
             radius: 48,
-            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+            backgroundColor:
+            Theme.of(context).colorScheme.primaryContainer,
             child: Icon(
               Icons.account_circle,
               size: 96,
@@ -105,7 +117,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
             )
                 : const Icon(Icons.login),
-            label: Text(_isSigningIn ? 'Signing in...' : 'Sign in with Google'),
+            label:
+            Text(_isSigningIn ? 'Signing in...' : 'Sign in with Google'),
           )
         else
           OutlinedButton.icon(
@@ -117,7 +130,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         const SizedBox(height: 24),
         const Divider(),
 
-        // Settings Options
+        // Settings
         _buildMenuTile(
           context: context,
           icon: Icons.settings,
@@ -131,6 +144,28 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
         const Divider(height: 1),
 
+        // ── Rebates ──────────────────────────────────────────────────────
+        _buildMenuTile(
+          context: context,
+          icon: Icons.receipt_long_rounded,
+          title: 'My Rebates',
+          subtitle: 'Apply & track your mess rebate requests',
+          onTap: () {
+            if (isSignedIn) {
+              setState(() => _showRebateScreen = true);
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Please sign in to view rebates'),
+                ),
+              );
+            }
+          },
+        ),
+
+        const Divider(height: 1),
+
+        // Complaints
         _buildMenuTile(
           context: context,
           icon: Icons.feedback,
@@ -173,7 +208,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       subtitle: subtitle != null ? Text(subtitle) : null,
       trailing: Icon(
         Icons.chevron_right,
-        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+        color:
+        Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
       ),
       onTap: onTap,
     );

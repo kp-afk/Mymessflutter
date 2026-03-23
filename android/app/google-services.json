@@ -75,6 +75,14 @@
           }
         },
         {
+          "client_id": "60784874372-jv7s8oem89uk895tnbm30f7vo1dr4kqm.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.metaop.mymessflutter",
+            "certificate_hash": "3a82ceca201a3b109ec2e69eb778d5078adbd67b"
+          }
+        },
+        {
           "client_id": "60784874372-8nqhocnbteejtv1p44pj7l67f9vp9v5m.apps.googleusercontent.com",
           "client_type": 3
         }
